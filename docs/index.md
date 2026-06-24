@@ -35,6 +35,7 @@ In addition to textual corpora, there are multimodal corpora that contain a sign
   - [Advance Hate Check](tutorial/HateCheck)
   - [Complex Fact Check](tutorial/FactChecking)
 * [Kubernetes-Setup](instructions/Kubernetes)
+* [Ray-Setup](instructions/Ray)
 
 # Features
 Using DUUI, NLP preprocessing on texts can be performed using the following features:
@@ -71,8 +72,11 @@ The SwarmDriver complements the DockerDriver; it uses the same function alities,
 ### KubernetesDriver
 The KubernetesDriver works similarly to the SwarmDriver, but Kubernetes is used as the runtime environment instead of Docker Swarm.
 
-#### PodmanDriver
+### PodmanDriver
 The PodmanDriver works similarly to the DockerDriver, but Podman runs rootless.
+
+### RayDriver
+The RayDriver (`DUUIRayDriver`) runs components that use [Ray](https://www.ray.io/) for their own internal parallelism instead of being scaled by replicating whole containers. Rather than starting containers, it starts a Ray cluster (one head node plus N worker processes) and submits the specified Python script as a Ray job. It can also submit jobs to an already running external Ray cluster instead of managing its own. Besides the standard one-document-in/one-document-out processing, it supports a stream mode where N documents are streamed in one by one and only the final document triggers aggregation, producing a single combined result for the whole batch. See [`instructions/ray`](instructions/ray) for setting up Ray, including a UV-managed Python virtual environment.
 
 
 # Requirements
