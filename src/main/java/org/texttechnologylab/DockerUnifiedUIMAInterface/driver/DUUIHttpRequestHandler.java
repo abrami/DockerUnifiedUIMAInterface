@@ -118,13 +118,21 @@ public class DUUIHttpRequestHandler {
 
     /**
      * Send a {@link DUUIComposer#V1_COMPONENT_ENDPOINT_PROCESS DUUI V1 process} request to the component.
+     * Per the DUUI V1 convention the body is JSON, so {@code Content-Type: application/json}
+     * is set explicitly — without it, strict servers (e.g. Pydantic v2 / recent FastAPI) parse
+     * the body as a plain string instead of JSON and reject it with a 422.
      *
      * @param data an array of encoded data to send to the component
      * @return the {@link Response response}
      */
     public Response process(byte[] data) {
         String endpoint = DUUIComposer.V1_COMPONENT_ENDPOINT_PROCESS;
-        return post(endpoint, data);
+        HttpRequest request = this.builder.copy()
+                .uri(URI.create(this.url + endpoint))
+                .setHeader("Content-Type", "application/json") // overwrite, don't duplicate
+                .POST(HttpRequest.BodyPublishers.ofByteArray(data))
+                .build();
+        return sendAsync(request);
     }
 
     /**

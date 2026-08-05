@@ -372,7 +372,7 @@ public class DUUIPodmanDriver implements IDUUIDriverInterface {
         if (comp == null) {
             throw new InvalidParameterException("Invalid UUID, this component has not been instantiated by the local Driver");
         }
-        IDUUIInstantiatedPipelineComponent.process(aCas, comp, perf);
+        IDUUIInstantiatedPipelineComponent.process(aCas, comp, perf, composer);
 
     }
 

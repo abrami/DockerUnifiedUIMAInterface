@@ -789,7 +789,11 @@ public class DUUIComposer {
     public static List<IDUUIConnectionHandler> _clients = new ArrayList<>(); // Saves Websocket-Clients.
     private boolean _connection_open = false; // Let connection open for multiple consecutive use.
     private final TypeSystemDescription _minimalTypesystem;
-    private final List<DUUIEvent> events = new ArrayList<>();
+    // Thread-safe: piggybacked component logs are emitted from concurrent worker threads.
+    private final List<DUUIEvent> events = Collections.synchronizedList(new ArrayList<>());
+    // When enabled, tools are asked (via the DUUI-Log-Collect request header) to return
+    // their logs on the /v1/process response, which are then routed through addEvent.
+    private boolean _componentLoggingEnabled = true;
     private TypeSystemDescription instantiatedTypeSystem;
     private final Map<String, DUUIDocument> documents = new HashMap<>();
     private final Map<String, String> pipelineStatus = new HashMap<>();
@@ -2374,15 +2378,40 @@ public class DUUIComposer {
      */
     public void addEvent(DUUIEvent.Sender sender, String message, DebugLevel debugLevel) {
         DUUIEvent event = new DUUIEvent(sender, message, debugLevel);
-        events.add(event);
-        if (event.debugLevel().compareTo(this.debugLevel) <= 0
-                && !this.debugLevel.equals(DebugLevel.NONE)) {
+        events.add(event); // add on a synchronizedList is atomic
+        // Print when the event is at least as severe as the configured threshold
+        // (higher ordinal = more severe); NONE disables console output entirely.
+        if (!this.debugLevel.equals(DebugLevel.NONE)
+                && event.debugLevel().compareTo(this.debugLevel) >= 0) {
             System.out.println(event);
         }
     }
 
     public List<DUUIEvent> getEvents() {
-        return events;
+        synchronized (events) {
+            return new ArrayList<>(events);
+        }
+    }
+
+    /**
+     * Enable or disable component logging. When enabled (default), tools are asked to return
+     * their logs on the {@code /v1/process} response (piggyback), which are then routed
+     * through {@link #addEvent} — printed to the console per the {@link DebugLevel} threshold
+     * and collected in {@link #getEvents()}. No connection back to the composer is opened.
+     *
+     * @param enabled whether to collect component logs
+     * @return this composer
+     */
+    public DUUIComposer withComponentLogging(boolean enabled) {
+        _componentLoggingEnabled = enabled;
+        return this;
+    }
+
+    /**
+     * @return whether component logging is enabled
+     */
+    public boolean isComponentLoggingEnabled() {
+        return _componentLoggingEnabled;
     }
 
     /**

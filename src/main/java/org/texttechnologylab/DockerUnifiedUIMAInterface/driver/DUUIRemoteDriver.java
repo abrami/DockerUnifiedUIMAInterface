@@ -402,7 +402,7 @@ public class DUUIRemoteDriver implements IDUUIDriverInterface {
         if (comp.isWebsocket()) {
             IDUUIInstantiatedPipelineComponent.process_handler(aCas, comp, perf);
         } else {
-            IDUUIInstantiatedPipelineComponent.process(aCas, comp, perf);
+            IDUUIInstantiatedPipelineComponent.process(aCas, comp, perf, composer);
         }
     }
 

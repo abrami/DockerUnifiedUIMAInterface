@@ -12,6 +12,7 @@ import org.javatuples.Triplet;
 import org.texttechnologylab.DockerUnifiedUIMAInterface.DUUIComposer;
 import org.texttechnologylab.DockerUnifiedUIMAInterface.IDUUICommunicationLayer;
 import org.texttechnologylab.DockerUnifiedUIMAInterface.connection.DUUIWebsocketAlt;
+import org.texttechnologylab.DockerUnifiedUIMAInterface.monitoring.DUUIComponentLog;
 import org.texttechnologylab.DockerUnifiedUIMAInterface.connection.IDUUIConnectionHandler;
 import org.texttechnologylab.DockerUnifiedUIMAInterface.exception.PipelineComponentException;
 import org.texttechnologylab.DockerUnifiedUIMAInterface.pipeline_storage.DUUIPipelineDocumentPerformance;
@@ -103,6 +104,20 @@ public interface IDUUIInstantiatedPipelineComponent {
      * @throws PipelineComponentException
      */
     static void process(JCas jc, IDUUIInstantiatedPipelineComponent comp, DUUIPipelineDocumentPerformance perf) throws CASException, PipelineComponentException {
+        process(jc, comp, perf, null);
+    }
+
+    /**
+     * Calling the DUUI component. When a {@code composer} is given and component logging is
+     * enabled, the tool is asked to return its logs on the {@code /v1/process} response
+     * (piggyback) via the {@code DUUI-Log-Collect} header.
+     *
+     * @param jc       the CAS to process
+     * @param comp     the instantiated component
+     * @param perf     the performance tracker
+     * @param composer the owning composer (may be {@code null}; then no log headers are added)
+     */
+    static void process(JCas jc, IDUUIInstantiatedPipelineComponent comp, DUUIPipelineDocumentPerformance perf, DUUIComposer composer) throws CASException, PipelineComponentException {
         Triplet<IDUUIUrlAccessible, Long, Long> queue = comp.getComponent();
 
         IDUUICommunicationLayer layer = queue.getValue0().getCommunicationLayer();
@@ -137,9 +152,12 @@ public interface IDUUIInstantiatedPipelineComponent {
                     targetCas = viewJc.createView(comp.getTargetView());
                 }
 
+                DUUIHttpRequestHandler processHandler =
+                        new DUUIHttpRequestHandler(_client, queue.getValue0().generateURL(), pipelineComponent.getTimeout());
+                applyLogHeaders(processHandler, jc, comp, composer);
                 layer.process(
                         sourceCas,
-                        new DUUIHttpRequestHandler(_client, queue.getValue0().generateURL(), pipelineComponent.getTimeout()),
+                        processHandler,
                         comp.getParameters(),
                         targetCas
                 );
@@ -170,12 +188,14 @@ public interface IDUUIInstantiatedPipelineComponent {
             while (bRunning) {
                 tries++;
                 try {
-                    HttpRequest request = HttpRequest.newBuilder()
+                    HttpRequest.Builder requestBuilder = HttpRequest.newBuilder()
                             .uri(URI.create(queue.getValue0().generateURL() + DUUIComposer.V1_COMPONENT_ENDPOINT_PROCESS))
                             .timeout(Duration.ofSeconds(comp.getPipelineComponent().getTimeout()))
+                            .header("Content-Type", "application/json")
                             .POST(HttpRequest.BodyPublishers.ofByteArray(ok))
-                            .version(HttpClient.Version.HTTP_1_1)
-                            .build();
+                            .version(HttpClient.Version.HTTP_1_1);
+                    applyLogHeaders(requestBuilder, jc, comp, composer);
+                    HttpRequest request = requestBuilder.build();
                     resp = _client.sendAsync(request, HttpResponse.BodyHandlers.ofByteArray()).join();
                     break;
                 } catch (Exception e) {
@@ -195,6 +215,10 @@ public interface IDUUIInstantiatedPipelineComponent {
                 throw new IOException("Could not reach endpoint after " + postTries + " tries!");
             }
 
+
+            // Piggybacked component logs, present when DUUI-Log-Collect was sent. Collected
+            // for both success and error responses (logs are most useful on failures).
+            collectResponseLogs(resp.headers().firstValue(HEADER_LOGS).orElse(null), jc, comp, composer);
 
             if (resp.statusCode() == 200) {
                 ByteArrayInputStream st = new ByteArrayInputStream(resp.body());
@@ -246,6 +270,66 @@ public interface IDUUIInstantiatedPipelineComponent {
             }
         } finally {
             comp.addComponent(queue.getValue0());
+        }
+    }
+
+    /**
+     * Request header asking the tool to return its logs on the response (piggyback).
+     * The tool's {@code duui_logging} middleware only collects/returns logs when this is set.
+     */
+    String HEADER_LOG_COLLECT = "DUUI-Log-Collect";
+    /** Response header carrying the tool's logs as a JSON array. */
+    String HEADER_LOGS = "DUUI-Logs";
+
+    /**
+     * Ask the tool to return its logs, if the composer has component logging enabled, by
+     * setting the {@link #HEADER_LOG_COLLECT} request header. No-op when {@code composer} is
+     * {@code null} or logging is disabled.
+     */
+    static void applyLogHeaders(DUUIHttpRequestHandler handler, JCas jc, IDUUIInstantiatedPipelineComponent comp, DUUIComposer composer) {
+        if (composer != null && composer.isComponentLoggingEnabled()) {
+            handler.header(HEADER_LOG_COLLECT, "true");
+        }
+    }
+
+    /**
+     * Ask the tool to return its logs, if the composer has component logging enabled, by
+     * setting the {@link #HEADER_LOG_COLLECT} request header on a raw {@link HttpRequest.Builder}.
+     */
+    static void applyLogHeaders(HttpRequest.Builder builder, JCas jc, IDUUIInstantiatedPipelineComponent comp, DUUIComposer composer) {
+        if (composer != null && composer.isComponentLoggingEnabled()) {
+            builder.header(HEADER_LOG_COLLECT, "true");
+        }
+    }
+
+    /**
+     * Read the {@link #HEADER_LOGS} response header (if present) and route each log record to
+     * the composer, tagged with the component and document. No-op when logging is off or the
+     * header is absent.
+     *
+     * @param responseLogsHeader the {@code DUUI-Logs} response header value, or {@code null}
+     */
+    static void collectResponseLogs(String responseLogsHeader, JCas jc, IDUUIInstantiatedPipelineComponent comp, DUUIComposer composer) {
+        if (composer == null || responseLogsHeader == null || responseLogsHeader.isEmpty()) {
+            return;
+        }
+        DUUIComponentLog.emit(composer, safeComponentKey(comp), safeDocumentId(jc), responseLogsHeader);
+    }
+
+    private static String safeComponentKey(IDUUIInstantiatedPipelineComponent comp) {
+        try {
+            return comp.getUniqueComponentKey();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static String safeDocumentId(JCas jc) {
+        try {
+            DocumentMetaData dmd = DocumentMetaData.get(jc);
+            return dmd == null ? null : dmd.getDocumentId();
+        } catch (Exception e) {
+            return null;
         }
     }
 
