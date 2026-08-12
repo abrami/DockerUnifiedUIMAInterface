@@ -41,19 +41,6 @@ public class LoggingTest {
         // Hinzufügen der einzelnen Driver zum Composer
         composer.addDriver(uima_driver, remoteDriver, dockerDriver);
 
-        /*composer.add(new DUUIDockerDriver.Component("docker.texttechnologylab.org/duui-gnfinder-v2:latest")
-                        .withTargetView("newView")
-                        .withImageFetching()
-                .build());
-*/
-        /*composer.add(new DUUIDockerDriver.Component("docker.texttechnologylab.org/duui-gnfinder-v2:latest")
-                    .withParameter("sources", "[1,2,3,4,5,6,7]")
-                    .withParameter("oddsDetails", "true")
-                    .withParameter("allMatches", "true")
-                    .withParameter("ambiguousNames", "true")
-                .withImageFetching()
-                .build());*/
-
         composer.add(new DUUIRemoteDriver.Component("http://localhost:25591")
                 .withWorkers(1)
                 .withTargetView("out")
