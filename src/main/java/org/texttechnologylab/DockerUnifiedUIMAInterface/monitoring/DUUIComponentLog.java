@@ -3,6 +3,7 @@ package org.texttechnologylab.DockerUnifiedUIMAInterface.monitoring;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.texttechnologylab.DockerUnifiedUIMAInterface.DUUIComposer;
+import org.texttechnologylab.DockerUnifiedUIMAInterface.pipeline_storage.DUUIPipelineDocumentPerformance;
 
 /**
  * Parses the {@code DUUI-Logs} response header a tool component returns
@@ -25,12 +26,17 @@ public final class DUUIComponentLog {
     /**
      * Parse a {@code DUUI-Logs} header value and emit each record to the composer.
      *
-     * @param composer     the composer whose sink records are forwarded to
-     * @param componentKey the component that produced the logs (for tagging)
-     * @param documentId   the document being processed (for tagging), may be {@code null}
-     * @param logsJson     the raw {@code DUUI-Logs} header value (a JSON array)
+     * @param composer      the composer whose sink records are forwarded to
+     * @param componentKey  the component that produced the logs (for tagging and storage)
+     * @param componentName the component's human-readable name, preferred over {@code componentKey}
+     *                      for the {@code loggingSource} console prefix when non-{@code null}, may
+     *                      be {@code null}
+     * @param documentId    the document being processed (for tagging), may be {@code null}
+     * @param logsJson      the raw {@code DUUI-Logs} header value (a JSON array)
+     * @param perf          the per-document performance tracker the raw records are also appended
+     *                      to (for the "batch per document" DB path), may be {@code null}
      */
-    public static void emit(DUUIComposer composer, String componentKey, String documentId, String logsJson) {
+    public static void emit(DUUIComposer composer, String componentKey, String componentName, String documentId, String logsJson, DUUIPipelineDocumentPerformance perf) {
         if (composer == null || logsJson == null || logsJson.isEmpty()) {
             return;
         }
@@ -46,18 +52,32 @@ public final class DUUIComponentLog {
                 String stacktrace = text(node, "stacktrace", null);
                 Long timestamp = longOrNull(node, "timestamp");
 
+                // Append the raw record for the storage backend (flushed once per document).
+                if (perf != null) {
+                    perf.addLog(
+                            mapLevel(level).name(),
+                            logger,
+                            message,
+                            stacktrace,
+                            timestamp != null ? timestamp : System.currentTimeMillis(),
+                            componentKey);
+                }
+
                 StringBuilder sb = new StringBuilder();
                 if (composer.isLoggingSeverityEnabled()) {
                     sb.append('[').append(mapLevel(level).name()).append(']');
                 }
                 if (composer.isLoggingSourceEnabled()) {
-                    boolean hasKey = componentKey != null && !componentKey.isBlank();
+                    String source = (componentName != null && !componentName.isBlank())
+                            ? componentName
+                            : componentKey;
+                    boolean hasKey = source != null && !source.isBlank();
                     if (sb.length() > 0) {
                         sb.append(' ');
                     }
                     sb.append('[');
                     if (hasKey) {
-                        sb.append(componentKey);
+                        sb.append(source);
                     }
                     if (documentId != null) {
                         if (hasKey) {

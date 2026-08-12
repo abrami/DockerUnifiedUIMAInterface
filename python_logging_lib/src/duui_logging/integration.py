@@ -13,8 +13,10 @@ that still points at the same list object).
 
 from __future__ import annotations
 
+import inspect
 import json
-from typing import Any, Callable, List
+import os
+from typing import Any, Callable, List, Optional
 
 from . import context
 from .records import LogRecord
@@ -24,11 +26,20 @@ DEFAULT_MAX_BYTES = 16_000
 
 
 class DUUILoggingMiddleware:
-    """Collect a request's logs and return them in the ``DUUI-Logs`` response header."""
+    """Collect a request's logs and return them in the ``DUUI-Logs`` response header.
 
-    def __init__(self, app: Callable, max_bytes: int = DEFAULT_MAX_BYTES) -> None:
+    :param default_logger: fallback logger name for ``log_*`` calls that omit ``logger=``.
+        Prefer :func:`add_logging`, which fills this in automatically with the name of the
+        file that installs the middleware. (Starlette constructs the middleware lazily, on
+        the first request from inside its own frames, so the object cannot discover that
+        file itself — it has to be told.)
+    """
+
+    def __init__(self, app: Callable, max_bytes: int = DEFAULT_MAX_BYTES,
+                 default_logger: Optional[str] = None) -> None:
         self.app = app
         self.max_bytes = max_bytes
+        context.set_default_logger(default_logger)
 
     async def __call__(self, scope: dict, receive: Callable, send: Callable) -> Any:
         if scope.get("type") != "http":
@@ -62,6 +73,47 @@ class DUUILoggingMiddleware:
             await self.app(scope, receive, send_wrapper)
         finally:
             context.reset_buffer(token)
+
+
+def _caller_logger_name(depth: int = 1) -> Optional[str]:
+    """Best-effort name for the module ``depth`` frames above this one.
+
+    Prefers the caller's module ``__name__`` (e.g. ``letter_counter``), falling back to the
+    file's base name without extension when that is unhelpful (``__main__`` or missing).
+    """
+    stack = inspect.stack()
+    try:
+        if depth >= len(stack):
+            return None
+        frame_info = stack[depth]
+        name = frame_info.frame.f_globals.get("__name__")
+        if name and name != "__main__":
+            return name
+        filename = frame_info.filename
+        if filename:
+            base = os.path.splitext(os.path.basename(filename))[0]
+            return base or None
+        return None
+    finally:
+        del stack  # break reference cycles held by frame objects
+
+
+def add_logging(app, *, max_bytes: int = DEFAULT_MAX_BYTES,
+                default_logger: Optional[str] = None) -> str:
+    """Install :class:`DUUILoggingMiddleware` on ``app`` and pick a default logger name.
+
+    Drop-in for ``app.add_middleware(DUUILoggingMiddleware)``. When ``default_logger`` is not
+    given, the name of the file that made this call is used, so ``log_info("hi")`` (no
+    ``logger=``) is tagged with the component's module instead of an empty string.
+
+    :returns: the resolved default logger name.
+    """
+    if default_logger is None:
+        # depth=2: skip _caller_logger_name (0) and add_logging (1) to land on the caller.
+        default_logger = _caller_logger_name(depth=2)
+    context.set_default_logger(default_logger)
+    app.add_middleware(DUUILoggingMiddleware, max_bytes=max_bytes, default_logger=default_logger)
+    return context.get_default_logger()
 
 
 def _is_truthy(value) -> bool:

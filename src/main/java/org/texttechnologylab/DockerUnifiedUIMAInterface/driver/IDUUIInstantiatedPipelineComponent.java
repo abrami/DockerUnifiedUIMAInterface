@@ -218,7 +218,7 @@ public interface IDUUIInstantiatedPipelineComponent {
 
             // Piggybacked component logs, present when DUUI-Log-Collect was sent. Collected
             // for both success and error responses (logs are most useful on failures).
-            collectResponseLogs(resp.headers().firstValue(HEADER_LOGS).orElse(null), jc, comp, composer);
+            collectResponseLogs(resp.headers().firstValue(HEADER_LOGS).orElse(null), jc, comp, composer, perf);
 
             if (resp.statusCode() == 200) {
                 ByteArrayInputStream st = new ByteArrayInputStream(resp.body());
@@ -308,17 +308,27 @@ public interface IDUUIInstantiatedPipelineComponent {
      * header is absent.
      *
      * @param responseLogsHeader the {@code DUUI-Logs} response header value, or {@code null}
+     * @param perf               the per-document performance tracker the logs are also appended
+     *                           to for the "batch per document" DB path, may be {@code null}
      */
-    static void collectResponseLogs(String responseLogsHeader, JCas jc, IDUUIInstantiatedPipelineComponent comp, DUUIComposer composer) {
+    static void collectResponseLogs(String responseLogsHeader, JCas jc, IDUUIInstantiatedPipelineComponent comp, DUUIComposer composer, DUUIPipelineDocumentPerformance perf) {
         if (composer == null || responseLogsHeader == null || responseLogsHeader.isEmpty()) {
             return;
         }
-        DUUIComponentLog.emit(composer, safeComponentKey(comp), safeDocumentId(jc), responseLogsHeader);
+        DUUIComponentLog.emit(composer, safeComponentKey(comp), safeComponentName(comp), safeDocumentId(jc), responseLogsHeader, perf);
     }
 
     private static String safeComponentKey(IDUUIInstantiatedPipelineComponent comp) {
         try {
             return comp.getUniqueComponentKey();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static String safeComponentName(IDUUIInstantiatedPipelineComponent comp) {
+        try {
+            return comp.getPipelineComponent().getName();
         } catch (Exception e) {
             return null;
         }

@@ -24,11 +24,15 @@ Typical use in a FastAPI-based DUUI tool::
 
 The tool only collects/returns logs when Java asks (the ``DUUI-Log-Collect`` request
 header); otherwise the helpers just echo to stderr, so the same code runs fine standalone.
+
+To also forward logs emitted by third-party libraries through the stdlib :mod:`logging`
+module (and warnings via :mod:`warnings`), call :func:`duui_logging.install` once at
+startup — see :mod:`duui_logging.stdlib`.
 """
 
 from __future__ import annotations
 
-from .integration import DUUILoggingMiddleware
+from .integration import DUUILoggingMiddleware, add_logging
 from .duui_logger import (
     ErrorLevel,
     current_exception_trace,
@@ -42,6 +46,7 @@ from .duui_logger import (
     where_am_i,
 )
 from .records import LogRecord
+from .stdlib import DUUICollectHandler, install, uninstall
 
 __all__ = [
     # Prefab logging helpers (primary API)
@@ -57,6 +62,11 @@ __all__ = [
     "current_exception_trace",
     # FastAPI integration
     "DUUILoggingMiddleware",
+    "add_logging",
+    # stdlib logging bridge (forwards third-party library logs)
+    "DUUICollectHandler",
+    "install",
+    "uninstall",
     # record model
     "LogRecord",
 ]

@@ -2,9 +2,12 @@
 
 Each ``log_*`` function builds a structured record — level, message, optional timestamp
 and stacktrace — appends it to the current request's log buffer (so the middleware can
-return it to Java on the response), and echoes it to stderr so it stays visible in the
-tool's own container output. Every helper also returns the
-:class:`~duui_logging.records.LogRecord` it emitted.
+return it to Java on the response), and echoes it through the stdlib :mod:`logging`
+framework so it stays visible in the tool's own container output (falling back to a plain
+stderr print when no logging handler is configured). The DUUI level is mapped to the
+nearest stdlib level for that echo (``TRACE`` has no stdlib equivalent, so it shows at
+``INFO``), but the record buffered for Java always keeps its true DUUI level. Every helper
+also returns the :class:`~duui_logging.records.LogRecord` it emitted.
 
 Correlation (which component / which document) is added by the Java side, which already
 knows both — so the tool does not need to send them.
@@ -14,14 +17,16 @@ Stacktraces come in two flavours:
 * ``withException`` (default on for ``error`` / ``critical``): if the call happens while an
   exception is being handled (inside an ``except`` block), the real exception traceback is
   attached — the most useful thing when something breaks.
-* ``withStacktrace``: attach the current *call stack* (via :func:`where_am_i`) showing where
-  the log call was made, even when there is no exception.
+* ``withStacktrace`` (an ``int``): attach the current *call stack* (via :func:`where_am_i`)
+  showing where the log call was made, even when there is no exception. ``0`` disables it;
+  any value ``> 0`` enables it and is the number of most-recent frames to include.
 
 If both are requested, an active exception traceback wins.
 """
 
 from __future__ import annotations
 
+import logging
 import sys
 import time
 import traceback
@@ -41,6 +46,40 @@ class ErrorLevel(str, Enum):
     WARN = "WARN"
     ERROR = "ERROR"
     CRITICAL = "CRITICAL"
+
+
+# DUUI level -> stdlib logging level for *local display*. stdlib has no TRACE, so TRACE is
+# surfaced at INFO (kept visible under a normal INFO config); this only affects what the
+# container prints — the record buffered for Java keeps its true DUUI level.
+_DISPLAY_LEVEL = {
+    ErrorLevel.TRACE.value: logging.INFO,
+    ErrorLevel.DEBUG.value: logging.DEBUG,
+    ErrorLevel.INFO.value: logging.INFO,
+    ErrorLevel.WARN.value: logging.WARNING,
+    ErrorLevel.ERROR.value: logging.ERROR,
+    ErrorLevel.CRITICAL.value: logging.CRITICAL,
+}
+
+
+def _echo(level_name: str, logger_name: str, message: str, stacktrace: Optional[str]) -> None:
+    """Show a record in the container's own output via the stdlib :mod:`logging` framework.
+
+    Routes through ``logging.getLogger(logger_name)`` so tools can filter and format these
+    like any other log. The emission is tagged so the :class:`DUUICollectHandler` ignores it
+    (the caller already buffered the precise record for Java). When no logging handler is
+    configured — a standalone run that never called :func:`install` or ``basicConfig`` — it
+    falls back to a plain stderr print so the line still shows.
+    """
+    text = message if not stacktrace else f"{message}\n{stacktrace}"
+    py_logger = logging.getLogger(logger_name or "duui")
+    if py_logger.hasHandlers():
+        py_logger.log(
+            _DISPLAY_LEVEL.get(level_name, logging.INFO),
+            text,
+            extra={context.SKIP_COLLECT_ATTR: True},
+        )
+    else:
+        print(f"[{level_name}] {logger_name}: {text}", file=sys.stderr, flush=True)
 
 
 def where_am_i(depth: int = 1, _skip: int = 0) -> str:
@@ -86,17 +125,25 @@ def _emit(
     message: str,
     *,
     withTimeStamp: "bool | int | None",
-    withStacktrace: bool,
-    withStackTraceDepth: int,
+    withStacktrace: int,
     withException: bool,
-    logger: str = "duui",
+    logger: str = "",
 ) -> LogRecord:
-    """Build, echo and buffer a single record. Shared by every ``log_*`` helper."""
+    """Build, echo and buffer a single record. Shared by every ``log_*`` helper.
+
+    ``withStacktrace`` is an ``int``: ``0`` (or negative) means no call stack; any value
+    ``> 0`` attaches that many of the most-recent frames.
+    """
     stacktrace: Optional[str] = None
     if withException:
         stacktrace = current_exception_trace()
-    if stacktrace is None and withStacktrace:
-        stacktrace = where_am_i(withStackTraceDepth, _skip=1)  # drop the _emit frame
+    if stacktrace is None and withStacktrace > 0:
+        stacktrace = where_am_i(withStacktrace, _skip=1)  # drop the _emit frame
+
+    # No explicit logger: fall back to the process-wide default (the file that installed
+    # the middleware, if it used add_logging(); otherwise "duui").
+    if not logger:
+        logger = context.get_default_logger()
 
     record = LogRecord(
         level=level.value,
@@ -106,71 +153,57 @@ def _emit(
         timestamp=_resolve_timestamp(withTimeStamp),
     )
 
-    # Local visibility in the container's own stdout/stderr.
-    line = f"[{record.level}] {logger}: {message}"
-    if stacktrace:
-        line += "\n" + stacktrace
-    print(line, file=sys.stderr, flush=True)
-
-    # Buffered for return to Java on the response (no-op outside a collecting request).
+    # Buffered for return to Java on the response (no-op outside a collecting request). Uses
+    # the true DUUI level, so TRACE stays TRACE regardless of how it is displayed below.
     context.collect(record)
+
+    # Local visibility via the stdlib logging framework (mapped level; deduped for Java).
+    _echo(record.level, logger, message, stacktrace)
 
     return record
 
 
-def log_trace(message: str = "", withTimeStamp: "bool | int" = True, withStacktrace: bool = True,
-              withStackTraceDepth: int = 100, withException: bool = False,
+def log_trace(message: str = "", withTimeStamp: "bool | int" = True, withException: bool = False, withStacktrace: int = 20,
               logger: str = "") -> LogRecord:
-    """Log a trace message (verbose; full call stack by default)."""
+    """Log a trace message."""
     return _emit(ErrorLevel.TRACE, message, withTimeStamp=withTimeStamp,
-                 withStacktrace=withStacktrace, withStackTraceDepth=withStackTraceDepth,
-                 withException=withException, logger=logger)
+                 withStacktrace=withStacktrace, withException=withException, logger=logger)
 
 
-def log_debug(message: str, withTimeStamp: "bool | int" = True, withStacktrace: bool = True,
-              withStackTraceDepth: int = 5, withException: bool = False,
+def log_debug(message: str, withTimeStamp: "bool | int" = True, withException: bool = False, withStacktrace: int = 0,
               logger: str = "") -> LogRecord:
     """Log a debug message."""
     return _emit(ErrorLevel.DEBUG, message, withTimeStamp=withTimeStamp,
-                 withStacktrace=withStacktrace, withStackTraceDepth=withStackTraceDepth,
-                 withException=withException, logger=logger)
+                 withStacktrace=withStacktrace, withException=withException, logger=logger)
 
 
-def log_info(message: str, withTimeStamp: "bool | int" = False, withStacktrace: bool = False,
-             withStackTraceDepth: int = 1, withException: bool = False,
+def log_info(message: str, withTimeStamp: "bool | int" = True, withException: bool = False, withStacktrace: int = 0,
              logger: str = "") -> LogRecord:
-    """Log an info message (lightweight; no stacktrace by default)."""
+    """Log an info message."""
     return _emit(ErrorLevel.INFO, message, withTimeStamp=withTimeStamp,
-                 withStacktrace=withStacktrace, withStackTraceDepth=withStackTraceDepth,
-                 withException=withException, logger=logger)
+                 withStacktrace=withStacktrace, withException=withException, logger=logger)
 
 
-def log_warn(message: str, withTimeStamp: "bool | int" = True, withStacktrace: bool = False,
-             withStackTraceDepth: int = 1, withException: bool = False,
+def log_warn(message: str, withTimeStamp: "bool | int" = True, withException: bool = False, withStacktrace: int = 0,
              logger: str = "") -> LogRecord:
     """Log a warning message."""
     return _emit(ErrorLevel.WARN, message, withTimeStamp=withTimeStamp,
-                 withStacktrace=withStacktrace, withStackTraceDepth=withStackTraceDepth,
-                 withException=withException, logger=logger)
+                 withStacktrace=withStacktrace, withException=withException, logger=logger)
 
 
 # Alias for callers that prefer the full word.
 log_warning = log_warn
 
 
-def log_error(message: str, withTimeStamp: "bool | int" = True, withStacktrace: bool = False,
-              withStackTraceDepth: int = 10, withException: bool = True,
+def log_error(message: str, withTimeStamp: "bool | int" = True, withException: bool = True, withStacktrace: int = 0,
               logger: str = "") -> LogRecord:
     """Log an error. Inside an ``except`` block the exception traceback is attached."""
     return _emit(ErrorLevel.ERROR, message, withTimeStamp=withTimeStamp,
-                 withStacktrace=withStacktrace, withStackTraceDepth=withStackTraceDepth,
-                 withException=withException, logger=logger)
+                 withStacktrace=withStacktrace, withException=withException, logger=logger)
 
 
-def log_critical(message: str, withTimeStamp: "bool | int" = True, withStacktrace: bool = True,
-                 withStackTraceDepth: int = 70, withException: bool = True,
-                 logger: str = "") -> LogRecord:
+def log_critical(message: str, withTimeStamp: "bool | int" = True, withException: bool = True, withStacktrace: int = 20,
+                logger: str = "") -> LogRecord:
     """Log a critical error. Attaches the exception traceback if one is active."""
     return _emit(ErrorLevel.CRITICAL, message, withTimeStamp=withTimeStamp,
-                 withStacktrace=withStacktrace, withStackTraceDepth=withStackTraceDepth,
-                 withException=withException, logger=logger)
+                 withStacktrace=withStacktrace, withException=withException, logger=logger)

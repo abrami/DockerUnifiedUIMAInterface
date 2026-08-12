@@ -6,6 +6,8 @@ import org.texttechnologylab.DockerUnifiedUIMAInterface.driver.DUUIDockerDriver;
 import org.texttechnologylab.DockerUnifiedUIMAInterface.driver.DUUIRemoteDriver;
 import org.texttechnologylab.DockerUnifiedUIMAInterface.driver.DUUIUIMADriver;
 import org.texttechnologylab.DockerUnifiedUIMAInterface.lua.DUUILuaContext;
+import org.texttechnologylab.DockerUnifiedUIMAInterface.pipeline_storage.mongodb.DUUIMongoDBStorageBackend;
+import org.texttechnologylab.DockerUnifiedUIMAInterface.pipeline_storage.sqlite.DUUISqliteStorageBackend;
 
 import static org.apache.uima.fit.factory.AnalysisEngineFactory.createEngineDescription;
 
@@ -26,10 +28,11 @@ public class LoggingTest {
                 .withLuaContext(ctx)
                 .withWorkers(1)
                 .withDebugLevel(DUUIComposer.DebugLevel.TRACE)  // Add logger and set what to log
+                //.withComponentLogging(false)  // Can be used to disable component logging
                 .withDebugColorful(true)  // Make logs colorful: warnings red, ... (Default is true)
-                .withDebugSeverity(true)  // Print log level next to message (Default is false)
-                .withDebugSource(true);  // Print driver- and document name next to message (Default is true)
-
+                .withDebugSeverity(true)  // Print log level next to message (Default is true)
+                .withDebugSource(true)  // Print driver- and document name next to message (Default is true)
+                .withStorageBackend(new DUUISqliteStorageBackend("test.db"));
 
         DUUIUIMADriver uima_driver = new DUUIUIMADriver();
         DUUIRemoteDriver remoteDriver = new DUUIRemoteDriver();
@@ -54,9 +57,10 @@ public class LoggingTest {
         composer.add(new DUUIRemoteDriver.Component("http://localhost:25591")
                 .withWorkers(1)
                 .withTargetView("out")
+                .withName("MyComp")
                 .build());
 
-        composer.run(jCas);
+        composer.run(jCas, "Test");
     }
 
 }

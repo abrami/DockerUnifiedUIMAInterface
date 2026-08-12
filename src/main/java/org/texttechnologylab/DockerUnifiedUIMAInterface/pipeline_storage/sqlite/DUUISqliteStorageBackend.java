@@ -53,6 +53,8 @@ public class DUUISqliteStorageBackend implements IDUUIStorageBackend {
                 "durationComponentTotal INT,totalAnnotations INT, documentSize INT, serializedSize INT," +
                 "error TEXT," +
                 "document TEXT)");
+        stmt.execute("CREATE TABLE IF NOT EXISTS pipeline_document_log(pipelinename TEXT, component TEXT, document TEXT," +
+                "level TEXT, logger TEXT, message TEXT, stacktrace TEXT, timestamp INT)");
 
 
         _client.add(conn);
@@ -107,6 +109,10 @@ public class DUUISqliteStorageBackend implements IDUUIStorageBackend {
         PreparedStatement cleanUp2 = conn.prepareStatement("DELETE FROM pipeline_component where name = ?;");
         cleanUp2.setString(1, name);
         cleanUp2.execute();
+
+        PreparedStatement cleanUp3 = conn.prepareStatement("DELETE FROM pipeline_document_log where pipelinename = ?;");
+        cleanUp3.setString(1, name);
+        cleanUp3.execute();
 
 
         PreparedStatement stmt = conn.prepareStatement("INSERT INTO pipeline (name,workers) VALUES (?,?)");
@@ -165,6 +171,24 @@ public class DUUISqliteStorageBackend implements IDUUIStorageBackend {
                 stmt2.setString(11, points.getError());
                 stmt2.setString(12, points.getDocument());
                 stmt2.executeUpdate();
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+        }
+
+        // Component logs collected for this document (batch per document).
+        for (DUUIPipelineDocumentPerformance.DocumentLog log : perf.getLogs()) {
+            try {
+                PreparedStatement stmt3 = conn.prepareStatement("INSERT INTO pipeline_document_log(pipelinename, component, document, level, logger, message, stacktrace, timestamp) VALUES (?,?,?,?,?,?,?,?)");
+                stmt3.setString(1, perf.getRunKey());
+                stmt3.setString(2, log.getComponentKey());
+                stmt3.setString(3, perf.getDocument());
+                stmt3.setString(4, log.getLevel());
+                stmt3.setString(5, log.getLogger());
+                stmt3.setString(6, log.getMessage());
+                stmt3.setString(7, log.getStacktrace());
+                stmt3.setLong(8, log.getTimestamp());
+                stmt3.executeUpdate();
             } catch (SQLException e) {
                 e.printStackTrace();
             }

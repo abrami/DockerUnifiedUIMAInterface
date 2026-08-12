@@ -558,7 +558,7 @@ public class DUUIRayDriver implements IDUUIDriverInterface {
 
             HttpResponse<byte[]> response = client.send(request, HttpResponse.BodyHandlers.ofByteArray());
             IDUUIInstantiatedPipelineComponent.collectResponseLogs(
-                    response.headers().firstValue(IDUUIInstantiatedPipelineComponent.HEADER_LOGS).orElse(null), aCas, comp, composer);
+                    response.headers().firstValue(IDUUIInstantiatedPipelineComponent.HEADER_LOGS).orElse(null), aCas, comp, composer, perf);
 
             if (response.statusCode() != 200) {
                 String errorBody = new String(response.body(), java.nio.charset.StandardCharsets.UTF_8);
@@ -613,7 +613,7 @@ public class DUUIRayDriver implements IDUUIDriverInterface {
 
             HttpResponse<byte[]> streamResp = client.send(streamReq, HttpResponse.BodyHandlers.ofByteArray());
             IDUUIInstantiatedPipelineComponent.collectResponseLogs(
-                    streamResp.headers().firstValue(IDUUIInstantiatedPipelineComponent.HEADER_LOGS).orElse(null), aCas, comp, composer);
+                    streamResp.headers().firstValue(IDUUIInstantiatedPipelineComponent.HEADER_LOGS).orElse(null), aCas, comp, composer, perf);
             if (streamResp.statusCode() != 200) {
                 String body = new String(streamResp.body(), java.nio.charset.StandardCharsets.UTF_8);
                 throw new IOException("[RayParallelDriver] /v1/stream returned HTTP "
@@ -634,7 +634,7 @@ public class DUUIRayDriver implements IDUUIDriverInterface {
 
                 HttpResponse<byte[]> finalResp = client.send(finalReq, HttpResponse.BodyHandlers.ofByteArray());
                 IDUUIInstantiatedPipelineComponent.collectResponseLogs(
-                        finalResp.headers().firstValue(IDUUIInstantiatedPipelineComponent.HEADER_LOGS).orElse(null), aCas, comp, composer);
+                        finalResp.headers().firstValue(IDUUIInstantiatedPipelineComponent.HEADER_LOGS).orElse(null), aCas, comp, composer, perf);
                 if (finalResp.statusCode() != 200) {
                     String body = new String(finalResp.body(), java.nio.charset.StandardCharsets.UTF_8);
                     throw new IOException("[RayParallelDriver] /v1/finalize returned HTTP "

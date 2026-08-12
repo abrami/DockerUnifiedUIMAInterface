@@ -44,6 +44,11 @@ class DUUICollectHandler(logging.Handler):
     """Forward stdlib log records into the current request's DUUI buffer."""
 
     def emit(self, record: logging.LogRecord) -> None:
+        # Records the log_* helpers emitted for local display only: they already buffered
+        # their own precise record, so re-collecting here would duplicate them (at a
+        # possibly-remapped level). Skip them.
+        if getattr(record, context.SKIP_COLLECT_ATTR, False):
+            return
         try:
             stacktrace: Optional[str] = None
             if record.exc_info:

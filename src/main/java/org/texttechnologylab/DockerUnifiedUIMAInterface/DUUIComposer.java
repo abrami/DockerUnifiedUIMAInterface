@@ -795,7 +795,7 @@ public class DUUIComposer {
     // their logs on the /v1/process response, which are then routed through addEvent.
     private boolean _componentLoggingEnabled = true;
     // When enabled, the component log message is prefixed with its severity, e.g. [CRITICAL].
-    private boolean _loggingSeverityEnabled = false;
+    private boolean _loggingSeverityEnabled = true;
     // When enabled (default), the component log message is prefixed with its source,
     // e.g. [component key | document id].
     private boolean _loggingSourceEnabled = true;
@@ -2472,7 +2472,7 @@ public class DUUIComposer {
 
     /**
      * Enable or disable component logging. When enabled (default), tools are asked to return
-     * their logs on the {@code /v1/process} response (piggyback), which are then routed
+     * their logs on the {@code /v1/process} response which are then routed
      * through {@link #addEvent} — printed to the console per the {@link DebugLevel} threshold
      * and collected in {@link #getEvents()}. No connection back to the composer is opened.
      *
@@ -2493,7 +2493,7 @@ public class DUUIComposer {
 
     /**
      * Enable or disable prefixing component log messages with their severity. When enabled,
-     * each message is tagged with its level, e.g. {@code [CRITICAL]}. Disabled by default.
+     * each message is tagged with its level, e.g. {@code [CRITICAL]}. Enabled by default.
      *
      * @param withSeverity whether to prefix messages with their severity
      * @return this composer

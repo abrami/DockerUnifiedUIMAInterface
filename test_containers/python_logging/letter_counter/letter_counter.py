@@ -61,11 +61,11 @@ app = FastAPI(
 #      on the /v1/process response — no connection back to DUUI is opened);
 #   2) log with the prefab helpers log_info / log_warn / log_error / log_critical, which also
 #      capture the exception traceback when called inside an `except` block.
-app.add_middleware(duui_logging.DUUILoggingMiddleware)
+#duui_logging.add_logging(app)
 
 # Also forward logs emitted by third-party libraries through the stdlib `logging` module
 # (and warnings via `warnings.warn`) to the Java side. Call once, at startup.
-duui_logging.install(level=logging.INFO)
+#duui_logging.install(level=logging.INFO)
 
 # Stand-in for "some library" that logs the classic out-of-date notice. Just for testing :)
 _lib_logger = logging.getLogger("some_library")
@@ -134,12 +134,12 @@ async def process(request: DUUIRequest) -> DUUIResponse:
     """
     #log_info(f"Processing document ({len(request.text)} chars)", withTimeStamp=0)
 
-    log_trace("Trace Logged", withTimeStamp=0, withStacktrace=False, withException=False)
-    log_info("Info Logged", withTimeStamp=0, withStacktrace=False, withException=False)
-    log_debug("Debug Logged", withTimeStamp=0, withStacktrace=False, withException=False)
-    log_warn("Warn Logged", withTimeStamp=0, withStacktrace=False, withException=False)
-    log_error("Error Logged", withTimeStamp=0, withStacktrace=False, withException=False)
-    log_critical("Critical Logged", withTimeStamp=0, withStacktrace=False, withException=False)
+    log_trace("Trace Logged", withTimeStamp=0, withStacktrace=0, withException=False, logger="my-trace-logger")
+    log_info("Info Logged", withTimeStamp=0, withStacktrace=0, withException=False)
+    log_debug("Debug Logged", withTimeStamp=0, withStacktrace=0, withException=False)
+    log_warn("Warn Logged", withTimeStamp=0, withStacktrace=0, withException=False)
+    log_error("Error Logged", withTimeStamp=0, withStacktrace=5, withException=False)
+    log_critical("Critical Logged", withTimeStamp=0, withStacktrace=0, withException=False)
 
 
     _lib_logger.info("some_library initialised")
