@@ -2,6 +2,8 @@
 Counts how often each letter appears in total accross multiple documents
 """
 
+import duui_logging
+from duui_logging import log_debug, log_info, log_trace, log_warn, log_error, log_critical
 from fastapi import FastAPI, Response
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import PlainTextResponse
@@ -14,14 +16,6 @@ import os
 import ray
 import signal
 import time
-
-# DUUI logging: surface info/warning/error on the Java composer (returned on the response).
-# Falls back to plain prints if the library isn't installed, so the tool still runs.
-try:
-    import duui_logging
-except ImportError:  # pragma: no cover - optional dependency
-    duui_logging = None
-
 
 # -- Request / Response -------------
 
@@ -58,24 +52,14 @@ app = FastAPI(
     },
 )
 
-# -- Logging -------------
+# -- LoggingTest -------------
 # Two steps to make logs show up on the Java side:
 #   1) add DUUILoggingMiddleware (it collects logs during a request and returns them to DUUI
 #      on the /v1/process response — no connection back to DUUI is opened);
 #   2) log with the prefab helpers log_info / log_warn / log_error / log_critical, which also
 #      capture the exception traceback when called inside an `except` block.
-if duui_logging is not None:
-    app.add_middleware(duui_logging.DUUILoggingMiddleware)
-    from duui_logging import log_info, log_warn, log_error
-else:  # standalone fallback: keep the same call sites working without the library
-    def log_info(message, **kwargs):
-        print(f"[INFO] {message}")
+app.add_middleware(duui_logging.DUUILoggingMiddleware)
 
-    def log_warn(message, **kwargs):
-        print(f"[WARN] {message}")
-
-    def log_error(message, **kwargs):
-        print(f"[ERROR] {message}")
 
 # -- Communication layer (Lua script) ------------
 
@@ -138,10 +122,19 @@ async def process(request: DUUIRequest) -> DUUIResponse:
     """
     Count letter frequencies in one document and return the sorted counts.
     """
-    log_info(f"Processing document ({len(request.text)} chars)")
+    #log_info(f"Processing document ({len(request.text)} chars)", withTimeStamp=0)
+
+    log_trace("Trace Logged", withTimeStamp=0, withStacktrace=False, withException=False)
+    log_info("Info Logged", withTimeStamp=0, withStacktrace=False, withException=False)
+    log_debug("Debug Logged", withTimeStamp=0, withStacktrace=False, withException=False)
+    log_warn("Warn Logged", withTimeStamp=0, withStacktrace=False, withException=False)
+    log_error("Error Logged", withTimeStamp=0, withStacktrace=False, withException=False)
+    log_critical("Critical Logged", withTimeStamp=0, withStacktrace=False, withException=False)
+
+
 
     if not request.text.strip():
-        log_warn("Document is empty — it will contribute no letter counts")
+        log_warn("Document is empty. it will contribute no letter counts", logger="letter-counter", withTimeStamp=True)
 
     try:
         total: dict[str, int] = _count_letters_chunk(request.text)
@@ -151,7 +144,7 @@ async def process(request: DUUIRequest) -> DUUIResponse:
 
     total = dict(sorted(total.items()))
 
-    log_info(f"Done: {len(total)} unique letters", withTimeStamp=True, withStacktrace=True, withStackTraceDepth=20)
+    #log_critical(f"Done: {len(total)} unique letters", logger="letter-counter", withTimeStamp=True)
     return DUUIResponse(counts=total)
 
 if __name__ == "__main__":

@@ -76,7 +76,7 @@ def _encode_logs(records: List[LogRecord], max_bytes: int) -> str:
     """Serialise records to a compact ASCII JSON array, bounded by ``max_bytes``.
 
     Oversized payloads shed stacktraces first, then drop the oldest records, keeping the
-    most recent ones — the tail is what usually matters when something just failed.
+    most recent ones.
     """
     if not records:
         return ""

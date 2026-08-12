@@ -211,7 +211,7 @@ public class DUUIPodmanDriver implements IDUUIDriverInterface {
         }
 
 
-        DUUIDockerDriver.InstantiatedComponent comp = new DUUIDockerDriver.InstantiatedComponent(component);
+        DUUIDockerDriver.InstantiatedComponent comp = new DUUIDockerDriver.InstantiatedComponent(component, "Podman");
 
         // Inverted if check because images will never be pulled if !comp.getImageFetching() is checked.
         if (comp.getImageFetching()) {

@@ -1,7 +1,7 @@
 [project]
 name = "duui-logging"
 version = "0.1.0"
-description = "Logging library for DUUI Python tool components: emits info/warning/error logs that can be surfaced on the Java side"
+description = "LoggingTest library for DUUI Python tool components: emits info/warning/error logs that can be surfaced on the Java side"
 readme = "README.md"
 authors = [
     { name = "Daniel Bundan", email = "bundan@em.uni-frankfur.de" }

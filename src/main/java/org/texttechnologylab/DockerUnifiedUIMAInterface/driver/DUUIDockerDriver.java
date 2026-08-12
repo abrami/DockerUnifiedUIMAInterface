@@ -542,6 +542,10 @@ public class DUUIDockerDriver implements IDUUIDriverInterface {
         }
 
         InstantiatedComponent(DUUIPipelineComponent comp) {
+            this(comp, "Docker");
+        }
+
+        InstantiatedComponent(DUUIPipelineComponent comp, String uniqueComponentKey) {
             _component = comp;
             _image_name = comp.getDockerImageName();
             _parameters = comp.getParameters();
@@ -552,7 +556,7 @@ public class DUUIDockerDriver implements IDUUIDriverInterface {
             }
             _withImageFetching = comp.getDockerImageFetching(false);
 
-            _uniqueComponentKey = "";
+            _uniqueComponentKey = uniqueComponentKey;
 
 
             _instances = new ConcurrentLinkedQueue<ComponentInstance>();

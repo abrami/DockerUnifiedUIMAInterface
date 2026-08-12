@@ -5,9 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.texttechnologylab.DockerUnifiedUIMAInterface.DUUIComposer;
 
 /**
- * Parses the {@code DUUI-Logs} response header a tool component returns (the piggyback
- * transport) and forwards each record to the composer's event sink via
- * {@link DUUIComposer#addEvent}.
+ * Parses the {@code DUUI-Logs} response header a tool component returns
  * <p>
  * The header value is a JSON array of records emitted by the tool's {@code duui_logging}
  * library, each shaped like:
@@ -46,22 +44,48 @@ public final class DUUIComponentLog {
                 String message = text(node, "message", "");
                 String logger = text(node, "logger", null);
                 String stacktrace = text(node, "stacktrace", null);
+                Long timestamp = longOrNull(node, "timestamp");
 
                 StringBuilder sb = new StringBuilder();
-                sb.append('[').append(componentKey != null ? componentKey : "?");
-                if (documentId != null) {
-                    sb.append(" | ").append(documentId);
+                if (composer.isLoggingSeverityEnabled()) {
+                    sb.append('[').append(mapLevel(level).name()).append(']');
                 }
-                sb.append("] ");
-                if (logger != null) {
-                    sb.append(logger).append(": ");
+                if (composer.isLoggingSourceEnabled()) {
+                    boolean hasKey = componentKey != null && !componentKey.isBlank();
+                    if (sb.length() > 0) {
+                        sb.append(' ');
+                    }
+                    sb.append('[');
+                    if (hasKey) {
+                        sb.append(componentKey);
+                    }
+                    if (documentId != null) {
+                        if (hasKey) {
+                            sb.append(" | ");
+                        }
+                        sb.append(documentId);
+                    }
+                    sb.append("]");
+                }
+                if (logger != null && !logger.isEmpty()) {
+                    if (sb.length() > 0) {
+                        sb.append(' ');
+                    }
+                    sb.append(logger);
+                }
+                if (sb.length() > 0) {
+                    sb.append(": ");
                 }
                 sb.append(message);
                 if (stacktrace != null && !stacktrace.isEmpty()) {
                     sb.append(System.lineSeparator()).append(stacktrace);
                 }
 
-                composer.addEvent(DUUIEvent.Sender.COMPONENT, sb.toString(), mapLevel(level));
+                if (timestamp != null) {
+                    composer.addEvent(DUUIEvent.Sender.COMPONENT, sb.toString(), mapLevel(level), timestamp);
+                } else {
+                    composer.addEvent(DUUIEvent.Sender.COMPONENT, sb.toString(), mapLevel(level));
+                }
             }
         } catch (Exception e) {
             composer.addEvent(
@@ -74,6 +98,25 @@ public final class DUUIComponentLog {
     private static String text(JsonNode node, String field, String fallback) {
         JsonNode value = node.get(field);
         return (value == null || value.isNull()) ? fallback : value.asText();
+    }
+
+    /**
+     * Read a numeric field as a {@code Long}, returning {@code null} when the field is absent,
+     * JSON null, or not a parsable number.
+     */
+    private static Long longOrNull(JsonNode node, String field) {
+        JsonNode value = node.get(field);
+        if (value == null || value.isNull()) {
+            return null;
+        }
+        if (value.isNumber()) {
+            return value.asLong();
+        }
+        try {
+            return Long.parseLong(value.asText().trim());
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     /**

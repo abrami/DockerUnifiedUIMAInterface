@@ -340,7 +340,7 @@ public class DUUISwarmDriver implements IDUUIDriverInterface {
         }
 
         public String getUniqueComponentKey() {
-            return "";
+            return "Swarm";
         }
 
         public String getPassword() {

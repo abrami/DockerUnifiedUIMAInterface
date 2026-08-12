@@ -65,11 +65,27 @@ def current_exception_trace() -> Optional[str]:
     ).rstrip()
 
 
+def _resolve_timestamp(withTimeStamp: "bool | int | None") -> Optional[int]:
+    """Turn the ``withTimeStamp`` argument into an epoch-millis value or ``None``.
+
+    ``True`` means "now"; ``False``/``None`` means no timestamp; any other number is used
+    verbatim as an epoch-millis value (letting the caller set a custom timestamp).
+
+    ``bool`` is a subclass of ``int`` in Python, so booleans are checked with ``is`` before
+    the numeric branch — otherwise ``True`` would be treated as the timestamp ``1``.
+    """
+    if withTimeStamp is True:
+        return int(time.time() * 1000)
+    if withTimeStamp is False or withTimeStamp is None:
+        return None
+    return int(withTimeStamp)
+
+
 def _emit(
     level: ErrorLevel,
     message: str,
     *,
-    withTimeStamp: bool,
+    withTimeStamp: "bool | int | None",
     withStacktrace: bool,
     withStackTraceDepth: int,
     withException: bool,
@@ -87,7 +103,7 @@ def _emit(
         message=message,
         logger=logger,
         stacktrace=stacktrace,
-        timestamp=int(time.time() * 1000) if withTimeStamp else None,
+        timestamp=_resolve_timestamp(withTimeStamp),
     )
 
     # Local visibility in the container's own stdout/stderr.
@@ -102,53 +118,59 @@ def _emit(
     return record
 
 
-def log_trace(message: str = "", withTimeStamp: bool = True, withStacktrace: bool = True,
-              withStackTraceDepth: int = 200, withException: bool = False, **kwargs) -> LogRecord:
+def log_trace(message: str = "", withTimeStamp: "bool | int" = True, withStacktrace: bool = True,
+              withStackTraceDepth: int = 100, withException: bool = False,
+              logger: str = "") -> LogRecord:
     """Log a trace message (verbose; full call stack by default)."""
     return _emit(ErrorLevel.TRACE, message, withTimeStamp=withTimeStamp,
                  withStacktrace=withStacktrace, withStackTraceDepth=withStackTraceDepth,
-                 withException=withException, **kwargs)
+                 withException=withException, logger=logger)
 
 
-def log_debug(message: str, withTimeStamp: bool = True, withStacktrace: bool = True,
-              withStackTraceDepth: int = 30, withException: bool = False, **kwargs) -> LogRecord:
+def log_debug(message: str, withTimeStamp: "bool | int" = True, withStacktrace: bool = True,
+              withStackTraceDepth: int = 5, withException: bool = False,
+              logger: str = "") -> LogRecord:
     """Log a debug message."""
     return _emit(ErrorLevel.DEBUG, message, withTimeStamp=withTimeStamp,
                  withStacktrace=withStacktrace, withStackTraceDepth=withStackTraceDepth,
-                 withException=withException, **kwargs)
+                 withException=withException, logger=logger)
 
 
-def log_info(message: str, withTimeStamp: bool = False, withStacktrace: bool = False,
-             withStackTraceDepth: int = 1, withException: bool = False, **kwargs) -> LogRecord:
+def log_info(message: str, withTimeStamp: "bool | int" = False, withStacktrace: bool = False,
+             withStackTraceDepth: int = 1, withException: bool = False,
+             logger: str = "") -> LogRecord:
     """Log an info message (lightweight; no stacktrace by default)."""
     return _emit(ErrorLevel.INFO, message, withTimeStamp=withTimeStamp,
                  withStacktrace=withStacktrace, withStackTraceDepth=withStackTraceDepth,
-                 withException=withException, **kwargs)
+                 withException=withException, logger=logger)
 
 
-def log_warn(message: str, withTimeStamp: bool = True, withStacktrace: bool = False,
-             withStackTraceDepth: int = 1, withException: bool = False, **kwargs) -> LogRecord:
+def log_warn(message: str, withTimeStamp: "bool | int" = True, withStacktrace: bool = False,
+             withStackTraceDepth: int = 1, withException: bool = False,
+             logger: str = "") -> LogRecord:
     """Log a warning message."""
     return _emit(ErrorLevel.WARN, message, withTimeStamp=withTimeStamp,
                  withStacktrace=withStacktrace, withStackTraceDepth=withStackTraceDepth,
-                 withException=withException, **kwargs)
+                 withException=withException, logger=logger)
 
 
 # Alias for callers that prefer the full word.
 log_warning = log_warn
 
 
-def log_error(message: str, withTimeStamp: bool = True, withStacktrace: bool = False,
-              withStackTraceDepth: int = 10, withException: bool = True, **kwargs) -> LogRecord:
+def log_error(message: str, withTimeStamp: "bool | int" = True, withStacktrace: bool = False,
+              withStackTraceDepth: int = 10, withException: bool = True,
+              logger: str = "") -> LogRecord:
     """Log an error. Inside an ``except`` block the exception traceback is attached."""
     return _emit(ErrorLevel.ERROR, message, withTimeStamp=withTimeStamp,
                  withStacktrace=withStacktrace, withStackTraceDepth=withStackTraceDepth,
-                 withException=withException, **kwargs)
+                 withException=withException, logger=logger)
 
 
-def log_critical(message: str, withTimeStamp: bool = True, withStacktrace: bool = True,
-                 withStackTraceDepth: int = 70, withException: bool = True, **kwargs) -> LogRecord:
+def log_critical(message: str, withTimeStamp: "bool | int" = True, withStacktrace: bool = True,
+                 withStackTraceDepth: int = 70, withException: bool = True,
+                 logger: str = "") -> LogRecord:
     """Log a critical error. Attaches the exception traceback if one is active."""
     return _emit(ErrorLevel.CRITICAL, message, withTimeStamp=withTimeStamp,
                  withStacktrace=withStacktrace, withStackTraceDepth=withStackTraceDepth,
-                 withException=withException, **kwargs)
+                 withException=withException, logger=logger)

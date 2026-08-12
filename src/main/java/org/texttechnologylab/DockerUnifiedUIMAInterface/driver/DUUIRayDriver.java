@@ -1169,7 +1169,7 @@ public class DUUIRayDriver implements IDUUIDriverInterface {
         @Override public Map<String, String> getParameters() { return parameters; }
         @Override public String getSourceView() { return sourceView; }
         @Override public String getTargetView() { return targetView; }
-        @Override public String getUniqueComponentKey() { return url; }
+        @Override public String getUniqueComponentKey() { return "Ray"; }
 
         @Override
         public Triplet<IDUUIUrlAccessible, Long, Long> getComponent() {

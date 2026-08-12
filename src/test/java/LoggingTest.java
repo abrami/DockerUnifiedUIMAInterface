@@ -1,18 +1,15 @@
 import org.apache.uima.fit.factory.JCasFactory;
-import org.apache.uima.fit.util.JCasUtil;
 import org.apache.uima.jcas.JCas;
 import org.junit.Test;
 import org.texttechnologylab.DockerUnifiedUIMAInterface.DUUIComposer;
 import org.texttechnologylab.DockerUnifiedUIMAInterface.driver.DUUIDockerDriver;
 import org.texttechnologylab.DockerUnifiedUIMAInterface.driver.DUUIRemoteDriver;
 import org.texttechnologylab.DockerUnifiedUIMAInterface.driver.DUUIUIMADriver;
-import org.texttechnologylab.DockerUnifiedUIMAInterface.io.writer.TTLabXmiWriter;
 import org.texttechnologylab.DockerUnifiedUIMAInterface.lua.DUUILuaContext;
-import org.texttechnologylab.annotation.biofid.gnfinder.VerifiedTaxon;
 
 import static org.apache.uima.fit.factory.AnalysisEngineFactory.createEngineDescription;
 
-public class Logging {
+public class LoggingTest {
 
     @Test
     public void runDUUI() throws Exception{
@@ -28,7 +25,11 @@ public class Logging {
                 .withSkipVerification(true)     // wir überspringen die Verifikation aller Componenten =)
                 .withLuaContext(ctx)            // wir setzen den definierten Kontext
                 .withWorkers(1)          // wir geben dem Composer eine Anzahl an Threads mit.
-                .withDebugLevel(DUUIComposer.DebugLevel.INFO); // Konsolen-Schwelle: ohne das keine Ausgeben
+                .withDebugLevel(DUUIComposer.DebugLevel.TRACE) // Konsolen-Schwelle: ohne das keine Ausgeben
+                .withDebugColorful(true)
+                .withDebugSeverity(true)
+                .withDebugSource(true);
+
 
         DUUIUIMADriver uima_driver = new DUUIUIMADriver();
         DUUIRemoteDriver remoteDriver = new DUUIRemoteDriver();
