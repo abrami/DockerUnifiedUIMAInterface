@@ -2,6 +2,9 @@
 Counts how often each letter appears in total accross multiple documents
 """
 
+import logging
+import warnings
+
 import duui_logging
 from duui_logging import log_debug, log_info, log_trace, log_warn, log_error, log_critical
 from fastapi import FastAPI, Response
@@ -59,6 +62,13 @@ app = FastAPI(
 #   2) log with the prefab helpers log_info / log_warn / log_error / log_critical, which also
 #      capture the exception traceback when called inside an `except` block.
 app.add_middleware(duui_logging.DUUILoggingMiddleware)
+
+# Also forward logs emitted by third-party libraries through the stdlib `logging` module
+# (and warnings via `warnings.warn`) to the Java side. Call once, at startup.
+duui_logging.install(level=logging.INFO)
+
+# Stand-in for "some library" that logs the classic out-of-date notice. Just for testing :)
+_lib_logger = logging.getLogger("some_library")
 
 
 # -- Communication layer (Lua script) ------------
@@ -132,6 +142,12 @@ async def process(request: DUUIRequest) -> DUUIResponse:
     log_critical("Critical Logged", withTimeStamp=0, withStacktrace=False, withException=False)
 
 
+    _lib_logger.info("some_library initialised")
+    _lib_logger.warning("some_library 1.2.0 is out of date; latest is 1.5.0")
+    _lib_logger.exception("some_library failed to load config file")
+
+    # A DeprecationWarning raised via warnings.warn is captured too (captureWarnings=True).
+    warnings.warn("some_library.old_api() is deprecated", DeprecationWarning)
 
     if not request.text.strip():
         log_warn("Document is empty. it will contribute no letter counts", logger="letter-counter", withTimeStamp=True)

@@ -22,13 +22,13 @@ public class LoggingTest {
         DUUILuaContext ctx = new DUUILuaContext().withJsonLibrary();
         // Instanziierung des Composers, mit einigen Parametern
         DUUIComposer composer = new DUUIComposer()
-                .withSkipVerification(true)     // wir überspringen die Verifikation aller Componenten =)
-                .withLuaContext(ctx)            // wir setzen den definierten Kontext
-                .withWorkers(1)          // wir geben dem Composer eine Anzahl an Threads mit.
-                .withDebugLevel(DUUIComposer.DebugLevel.TRACE) // Konsolen-Schwelle: ohne das keine Ausgeben
-                .withDebugColorful(true)
-                .withDebugSeverity(true)
-                .withDebugSource(true);
+                .withSkipVerification(true)
+                .withLuaContext(ctx)
+                .withWorkers(1)
+                .withDebugLevel(DUUIComposer.DebugLevel.TRACE)  // Add logger and set what to log
+                .withDebugColorful(true)  // Make logs colorful: warnings red, ... (Default is true)
+                .withDebugSeverity(true)  // Print log level next to message (Default is false)
+                .withDebugSource(true);  // Print driver- and document name next to message (Default is true)
 
 
         DUUIUIMADriver uima_driver = new DUUIUIMADriver();
