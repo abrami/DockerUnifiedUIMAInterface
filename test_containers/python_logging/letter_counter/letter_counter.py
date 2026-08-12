@@ -61,11 +61,11 @@ app = FastAPI(
 #      on the /v1/process response — no connection back to DUUI is opened);
 #   2) log with the prefab helpers log_info / log_warn / log_error / log_critical, which also
 #      capture the exception traceback when called inside an `except` block.
-#duui_logging.add_logging(app)
+duui_logging.add_logging(app)
 
 # Also forward logs emitted by third-party libraries through the stdlib `logging` module
 # (and warnings via `warnings.warn`) to the Java side. Call once, at startup.
-#duui_logging.install(level=logging.INFO)
+duui_logging.install(level=logging.INFO)
 
 # Stand-in for "some library" that logs the classic out-of-date notice. Just for testing :)
 _lib_logger = logging.getLogger("some_library")
