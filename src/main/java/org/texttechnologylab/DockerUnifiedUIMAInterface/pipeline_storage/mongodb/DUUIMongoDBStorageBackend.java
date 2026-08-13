@@ -38,11 +38,13 @@ public class DUUIMongoDBStorageBackend implements IDUUIStorageBackend {
         MongoCollection<Document> performanceCollection = database.getCollection("pipeline_perf");
         MongoCollection<Document> documentPerformanceCollection = database.getCollection("pipeline_document_perf");
         MongoCollection<Document> componentCollection = database.getCollection("pipeline_component");
+        MongoCollection<Document> documentLogCollection = database.getCollection("pipeline_document_log");
 
         pipelineCollection.findOneAndDelete(Filters.eq("name", name));
         performanceCollection.findOneAndDelete(Filters.eq("name", name));
         documentPerformanceCollection.findOneAndDelete(Filters.eq("pipelinename", name));
         componentCollection.findOneAndDelete(Filters.eq("name", name));
+        documentLogCollection.deleteMany(Filters.eq("pipelinename", name));
 
         pipelineCollection.insertOne(
                 new Document("name", name)
@@ -65,6 +67,7 @@ public class DUUIMongoDBStorageBackend implements IDUUIStorageBackend {
         MongoDatabase database = this._client.getDatabase("duui_metrics");
         MongoCollection<Document> documentCollection = database.getCollection("pipeline_document");
         MongoCollection<Document> documentPerformanceCollection = database.getCollection("pipeline_document_perf");
+        MongoCollection<Document> documentLogCollection = database.getCollection("pipeline_document_log");
 
         documentCollection.insertOne(
                 new Document("documentSize", perf.getDocumentSize())
@@ -88,6 +91,20 @@ public class DUUIMongoDBStorageBackend implements IDUUIStorageBackend {
                             .append("serializedSize", point.getSerializedSize())
                             .append("error", point.getError())
                             .append("document", point.getDocument())
+            );
+        }
+
+        // Component logs collected for this document (batch per document).
+        for (DUUIPipelineDocumentPerformance.DocumentLog log : perf.getLogs()) {
+            documentLogCollection.insertOne(
+                    new Document("pipelinename", perf.getRunKey())
+                            .append("component", log.getComponentKey())
+                            .append("document", perf.getDocument())
+                            .append("level", log.getLevel())
+                            .append("logger", log.getLogger())
+                            .append("message", log.getMessage())
+                            .append("stacktrace", log.getStacktrace())
+                            .append("timestamp", log.getTimestamp())
             );
         }
     }

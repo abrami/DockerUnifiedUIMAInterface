@@ -233,7 +233,7 @@ public class DUUISwarmDriver implements IDUUIDriverInterface {
         if (comp.isWebsocket()) {
             IDUUIInstantiatedPipelineComponent.process_handler(aCas, comp, perf);
         } else {
-            IDUUIInstantiatedPipelineComponent.process(aCas, comp, perf);
+            IDUUIInstantiatedPipelineComponent.process(aCas, comp, perf, composer);
         }
     }
 
@@ -340,7 +340,7 @@ public class DUUISwarmDriver implements IDUUIDriverInterface {
         }
 
         public String getUniqueComponentKey() {
-            return "";
+            return "Swarm";
         }
 
         public String getPassword() {

@@ -789,7 +789,18 @@ public class DUUIComposer {
     public static List<IDUUIConnectionHandler> _clients = new ArrayList<>(); // Saves Websocket-Clients.
     private boolean _connection_open = false; // Let connection open for multiple consecutive use.
     private final TypeSystemDescription _minimalTypesystem;
-    private final List<DUUIEvent> events = new ArrayList<>();
+    // Thread-safe: piggybacked component logs are emitted from concurrent worker threads.
+    private final List<DUUIEvent> events = Collections.synchronizedList(new ArrayList<>());
+    // When enabled, tools are asked (via the DUUI-Log-Collect request header) to return
+    // their logs on the /v1/process response, which are then routed through addEvent.
+    private boolean _componentLoggingEnabled = true;
+    // When enabled, the component log message is prefixed with its severity, e.g. [CRITICAL].
+    private boolean _loggingSeverityEnabled = true;
+    // When enabled (default), the component log message is prefixed with its source,
+    // e.g. [component key | document id].
+    private boolean _loggingSourceEnabled = true;
+    // When enabled, ERROR/CRITICAL events are printed to the console in red (ANSI).
+    private boolean _colorfulLoggingEnabled = true;
     private TypeSystemDescription instantiatedTypeSystem;
     private final Map<String, DUUIDocument> documents = new HashMap<>();
     private final Map<String, String> pipelineStatus = new HashMap<>();
@@ -2373,16 +2384,150 @@ public class DUUIComposer {
      * @param debugLevel Debug level.
      */
     public void addEvent(DUUIEvent.Sender sender, String message, DebugLevel debugLevel) {
-        DUUIEvent event = new DUUIEvent(sender, message, debugLevel);
-        events.add(event);
-        if (event.debugLevel().compareTo(this.debugLevel) <= 0
-                && !this.debugLevel.equals(DebugLevel.NONE)) {
-            System.out.println(event);
+        addEvent(new DUUIEvent(sender, message, debugLevel));
+    }
+
+    /**
+     * Add a new Event to the events list of the Composer, using a caller-supplied timestamp.
+     * Used when the event originates elsewhere (e.g. a component's own log record) so its
+     * original time is preserved rather than being re-stamped with the receive time.
+     *
+     * @param sender     The class or object adding the event.
+     * @param message    The message of the event.
+     * @param debugLevel Debug level.
+     * @param timestamp  Event time in epoch milliseconds.
+     */
+    public void addEvent(DUUIEvent.Sender sender, String message, DebugLevel debugLevel, long timestamp) {
+        addEvent(new DUUIEvent(sender, message, timestamp, debugLevel));
+    }
+
+    private void addEvent(DUUIEvent event) {
+        events.add(event); // add on a synchronizedList is atomic
+        // Print when the event is at least as severe as the configured threshold
+        // (higher ordinal = more severe); NONE disables console output entirely.
+        if (!this.debugLevel.equals(DebugLevel.NONE)
+                && event.debugLevel().compareTo(this.debugLevel) >= 0) {
+            System.out.println(colorize(event));
         }
     }
 
+    // ANSI color codes; ERROR/CRITICAL are printed red so they stand out in the console.
+    private static final String ANSI_RESET = "\u001B[0m";
+    private static final String ANSI_RED = "\u001B[31m";
+    private static final String ANSI_RED_BOLD = "\u001B[1;91m";
+    private static final String ANSI_YELLOW = "\u001B[93m";
+    private static final String ANSI_WHITE = "\u001B[97m";
+
+
+    /**
+     * Render an event as a console line, wrapping ERROR/CRITICAL events in red ANSI color.
+     * Color is skipped when disabled via {@link #withDebugColorful(boolean)} (boolean)}.
+     */
+    private String colorize(DUUIEvent event) {
+        if (!_colorfulLoggingEnabled) {
+            return event.toString();
+        }
+
+        if(event.debugLevel() == DebugLevel.INFO)
+            return ANSI_WHITE + event + ANSI_RESET;
+
+        if(event.debugLevel() == DebugLevel.WARN)
+            return ANSI_YELLOW + event + ANSI_RESET;
+
+        if(event.debugLevel() == DebugLevel.ERROR)
+            return ANSI_RED + event + ANSI_RESET;
+
+        if(event.debugLevel() == DebugLevel.CRITICAL)
+            return ANSI_RED_BOLD + event + ANSI_RESET;
+
+        return event.toString();
+    }
+
+    /**
+     * Enable or disable colored console output. When enabled (default), ERROR and CRITICAL
+     * events are printed in red so they stand out. Disable this when writing to a file or a
+     * terminal that does not understand ANSI escape codes.
+     * This only affects prints to the console.
+     *
+     * @param withColor whether to color events
+     * @return this composer
+     */
+    public DUUIComposer withDebugColorful(boolean withColor) {
+        _colorfulLoggingEnabled = withColor;
+        return this;
+    }
+
+    /**
+     * @return whether colored console output is enabled
+     */
+    public boolean isColorfulLoggingEnabled() {
+        return _colorfulLoggingEnabled;
+    }
+
     public List<DUUIEvent> getEvents() {
-        return events;
+        synchronized (events) {
+            return new ArrayList<>(events);
+        }
+    }
+
+    /**
+     * Enable or disable component logging. When enabled (default), tools are asked to return
+     * their logs on the {@code /v1/process} response which are then routed
+     * through {@link #addEvent} — printed to the console per the {@link DebugLevel} threshold
+     * and collected in {@link #getEvents()}. No connection back to the composer is opened.
+     *
+     * @param enabled whether to collect component logs
+     * @return this composer
+     */
+    public DUUIComposer withComponentLogging(boolean enabled) {
+        _componentLoggingEnabled = enabled;
+        return this;
+    }
+
+    /**
+     * @return whether component logging is enabled
+     */
+    public boolean isComponentLoggingEnabled() {
+        return _componentLoggingEnabled;
+    }
+
+    /**
+     * Enable or disable prefixing component log messages with their severity. When enabled,
+     * each message is tagged with its level, e.g. {@code [CRITICAL]}. Enabled by default.
+     *
+     * @param withSeverity whether to prefix messages with their severity
+     * @return this composer
+     */
+    public DUUIComposer withDebugSeverity(boolean withSeverity) {
+        _loggingSeverityEnabled = withSeverity;
+        return this;
+    }
+
+    /**
+     * @return whether component log messages are prefixed with their severity
+     */
+    public boolean isLoggingSeverityEnabled() {
+        return _loggingSeverityEnabled;
+    }
+
+    /**
+     * Enable or disable prefixing component log messages with their source. When enabled
+     * (default), each message is tagged with the producing component and document,
+     * e.g. {@code [component key | document id]}.
+     *
+     * @param withSource whether to prefix messages with their source
+     * @return this composer
+     */
+    public DUUIComposer withDebugSource(boolean withSource) {
+        _loggingSourceEnabled = withSource;
+        return this;
+    }
+
+    /**
+     * @return whether component log messages are prefixed with their source
+     */
+    public boolean isLoggingSourceEnabled() {
+        return _loggingSourceEnabled;
     }
 
     /**

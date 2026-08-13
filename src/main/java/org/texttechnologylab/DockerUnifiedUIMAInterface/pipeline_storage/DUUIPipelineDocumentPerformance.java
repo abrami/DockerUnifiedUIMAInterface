@@ -11,6 +11,14 @@ import java.util.Vector;
 
 public class DUUIPipelineDocumentPerformance {
     private final Vector<DUUIPipelinePerformancePoint> _points;
+
+    /**
+     * Component logs collected for this document during processing (piggybacked on the
+     * {@code /v1/process} response, see {@code DUUIComponentLog}). Accumulated across all
+     * components of a document, then flushed once per document by the storage backend in
+     * {@link #getLogs()} — the "batch per document" logging path.
+     */
+    private final Vector<DocumentLog> _logs;
     private final String _runKey;
     private Long _durationTotalSerialize;
     private Long _durationTotalDeserialize;
@@ -35,6 +43,7 @@ public class DUUIPipelineDocumentPerformance {
         this.trackErrorDocs = trackErrorDocs;
 
         _points = new Vector<>();
+        _logs = new Vector<>();
         _runKey = runKey;
 
         _documentWaitTime = waitDocumentTime;
@@ -79,6 +88,76 @@ public class DUUIPipelineDocumentPerformance {
 
     public Vector<DUUIPipelinePerformancePoint> getPerformancePoints() {
         return _points;
+    }
+
+    /**
+     * Record one component log line for this document. Called from {@code DUUIComponentLog.emit}
+     * while parsing the {@code DUUI-Logs} response header, so logs ride along with the metrics
+     * and get flushed together, once per document.
+     *
+     * @param level        the log level name (e.g. {@code INFO}, {@code WARN}, {@code ERROR})
+     * @param logger       the originating logger name, may be {@code null}
+     * @param message      the log message
+     * @param stacktrace   an attached stacktrace, may be {@code null}
+     * @param timestamp    epoch millis for the record
+     * @param componentKey the component that produced the log, may be {@code null}
+     */
+    public void addLog(String level, String logger, String message, String stacktrace, long timestamp, String componentKey) {
+        _logs.add(new DocumentLog(level, logger, message, stacktrace, timestamp, componentKey));
+    }
+
+    /**
+     * The component logs collected for this document, in order. Written to the storage backend
+     * alongside the performance points in {@code addMetricsForDocument}.
+     */
+    public Vector<DocumentLog> getLogs() {
+        return _logs;
+    }
+
+    /**
+     * A single component log line collected for a document. The raw fields are kept here (rather
+     * than the console-formatted string) so storage backends can persist them into columns.
+     */
+    public static final class DocumentLog {
+        private final String level;
+        private final String logger;
+        private final String message;
+        private final String stacktrace;
+        private final long timestamp;
+        private final String componentKey;
+
+        public DocumentLog(String level, String logger, String message, String stacktrace, long timestamp, String componentKey) {
+            this.level = level;
+            this.logger = logger;
+            this.message = message;
+            this.stacktrace = stacktrace;
+            this.timestamp = timestamp;
+            this.componentKey = componentKey;
+        }
+
+        public String getLevel() {
+            return level;
+        }
+
+        public String getLogger() {
+            return logger;
+        }
+
+        public String getMessage() {
+            return message;
+        }
+
+        public String getStacktrace() {
+            return stacktrace;
+        }
+
+        public long getTimestamp() {
+            return timestamp;
+        }
+
+        public String getComponentKey() {
+            return componentKey;
+        }
     }
 
     public void addData(long durationSerialize, long durationDeserialize, long durationAnnotator, long durationMutexWait, long durationComponentTotal, String componentKey, long serializeSize, JCas jc, String error) {

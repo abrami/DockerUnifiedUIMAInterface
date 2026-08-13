@@ -515,9 +515,9 @@ public class DUUIRayDriver implements IDUUIDriverInterface {
         }
 
         if (comp.isStreamMode()) {
-            runStream(comp, aCas, perf);
+            runStream(comp, aCas, perf, composer);
         } else {
-            runProcess(comp, aCas, perf);
+            runProcess(comp, aCas, perf, composer);
         }
     }
 
@@ -533,7 +533,7 @@ public class DUUIRayDriver implements IDUUIDriverInterface {
     }
 
     /** Standard process path: one CAS in, one CAS out via /v1/process */
-    private void runProcess(InstantiatedComponent comp, JCas aCas, DUUIPipelineDocumentPerformance perf)
+    private void runProcess(InstantiatedComponent comp, JCas aCas, DUUIPipelineDocumentPerformance perf, DUUIComposer composer)
             throws IOException, InterruptedException, CommunicationLayerException, CASException {
 
         Triplet<IDUUIUrlAccessible, Long, Long> queue = comp.getComponent();
@@ -548,14 +548,17 @@ public class DUUIRayDriver implements IDUUIDriverInterface {
             layer.serialize(aCas, out, luaParams, comp.getSourceView());
             byte[] payload = out.toByteArray();
 
-            HttpRequest request = HttpRequest.newBuilder()
+            HttpRequest.Builder requestBuilder = HttpRequest.newBuilder()
                     .uri(URI.create(url + DUUIComposer.V1_COMPONENT_ENDPOINT_PROCESS))
                     .timeout(Duration.ofSeconds(comp.getProcessingTimeout()))
                     .header("Content-Type", "application/json")
-                    .POST(HttpRequest.BodyPublishers.ofByteArray(payload))
-                    .build();
+                    .POST(HttpRequest.BodyPublishers.ofByteArray(payload));
+            IDUUIInstantiatedPipelineComponent.applyLogHeaders(requestBuilder, aCas, comp, composer);
+            HttpRequest request = requestBuilder.build();
 
             HttpResponse<byte[]> response = client.send(request, HttpResponse.BodyHandlers.ofByteArray());
+            IDUUIInstantiatedPipelineComponent.collectResponseLogs(
+                    response.headers().firstValue(IDUUIInstantiatedPipelineComponent.HEADER_LOGS).orElse(null), aCas, comp, composer, perf);
 
             if (response.statusCode() != 200) {
                 String errorBody = new String(response.body(), java.nio.charset.StandardCharsets.UTF_8);
@@ -577,7 +580,7 @@ public class DUUIRayDriver implements IDUUIDriverInterface {
      * On the last document, also POST to /v1/finalize and deserialize the result into the CAS
      * N−1 CAS objects are left unchanged
      */
-    private void runStream(InstantiatedComponent comp, JCas aCas, DUUIPipelineDocumentPerformance perf)
+    private void runStream(InstantiatedComponent comp, JCas aCas, DUUIPipelineDocumentPerformance perf, DUUIComposer composer)
             throws IOException, InterruptedException, CommunicationLayerException, CASException {
 
         long total = comp.getTotalDocuments();
@@ -600,14 +603,17 @@ public class DUUIRayDriver implements IDUUIDriverInterface {
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             layer.serialize(aCas, out, luaParams, comp.getSourceView());
 
-            HttpRequest streamReq = HttpRequest.newBuilder()
+            HttpRequest.Builder streamBuilder = HttpRequest.newBuilder()
                     .uri(URI.create(url + DUUIComposer.V1_COMPONENT_ENDPOINT_STREAM))
                     .timeout(Duration.ofSeconds(comp.getProcessingTimeout()))
                     .header("Content-Type", "application/json")
-                    .POST(HttpRequest.BodyPublishers.ofByteArray(out.toByteArray()))
-                    .build();
+                    .POST(HttpRequest.BodyPublishers.ofByteArray(out.toByteArray()));
+            IDUUIInstantiatedPipelineComponent.applyLogHeaders(streamBuilder, aCas, comp, composer);
+            HttpRequest streamReq = streamBuilder.build();
 
             HttpResponse<byte[]> streamResp = client.send(streamReq, HttpResponse.BodyHandlers.ofByteArray());
+            IDUUIInstantiatedPipelineComponent.collectResponseLogs(
+                    streamResp.headers().firstValue(IDUUIInstantiatedPipelineComponent.HEADER_LOGS).orElse(null), aCas, comp, composer, perf);
             if (streamResp.statusCode() != 200) {
                 String body = new String(streamResp.body(), java.nio.charset.StandardCharsets.UTF_8);
                 throw new IOException("[RayParallelDriver] /v1/stream returned HTTP "
@@ -618,14 +624,17 @@ public class DUUIRayDriver implements IDUUIDriverInterface {
 
             if (count >= total) {
                 // Last document: finalize and write Ray result into this CAS
-                HttpRequest finalReq = HttpRequest.newBuilder()
+                HttpRequest.Builder finalBuilder = HttpRequest.newBuilder()
                         .uri(URI.create(url + DUUIComposer.V1_COMPONENT_ENDPOINT_FINALIZE))
                         .timeout(Duration.ofSeconds(comp.getFinalizeTimeout()))
                         .header("Content-Type", "application/json")
-                        .POST(HttpRequest.BodyPublishers.noBody())
-                        .build();
+                        .POST(HttpRequest.BodyPublishers.noBody());
+                IDUUIInstantiatedPipelineComponent.applyLogHeaders(finalBuilder, aCas, comp, composer);
+                HttpRequest finalReq = finalBuilder.build();
 
                 HttpResponse<byte[]> finalResp = client.send(finalReq, HttpResponse.BodyHandlers.ofByteArray());
+                IDUUIInstantiatedPipelineComponent.collectResponseLogs(
+                        finalResp.headers().firstValue(IDUUIInstantiatedPipelineComponent.HEADER_LOGS).orElse(null), aCas, comp, composer, perf);
                 if (finalResp.statusCode() != 200) {
                     String body = new String(finalResp.body(), java.nio.charset.StandardCharsets.UTF_8);
                     throw new IOException("[RayParallelDriver] /v1/finalize returned HTTP "
@@ -1160,7 +1169,7 @@ public class DUUIRayDriver implements IDUUIDriverInterface {
         @Override public Map<String, String> getParameters() { return parameters; }
         @Override public String getSourceView() { return sourceView; }
         @Override public String getTargetView() { return targetView; }
-        @Override public String getUniqueComponentKey() { return url; }
+        @Override public String getUniqueComponentKey() { return "Ray"; }
 
         @Override
         public Triplet<IDUUIUrlAccessible, Long, Long> getComponent() {

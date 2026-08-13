@@ -381,7 +381,7 @@ public class DUUIKubernetesDriver implements IDUUIDriverInterface {
         if (comp.isWebsocket()) {
             IDUUIInstantiatedPipelineComponent.process_handler(aCas, comp, perf);
         } else {
-            IDUUIInstantiatedPipelineComponent.process(aCas, comp, perf);
+            IDUUIInstantiatedPipelineComponent.process(aCas, comp, perf, composer);
         }
     }
 
@@ -482,7 +482,7 @@ public class DUUIKubernetesDriver implements IDUUIDriverInterface {
 
         private final int _ws_elements;  // Dieses Attribut wird irgendwie dem _wsclient-String am Ende angeheftet. Ka wieso.
         private final List<String> _labels;
-        private final String _uniqueComponentKey = "";
+        private final String _uniqueComponentKey = "Kubernetes";
 
         InstantiatedComponent(DUUIPipelineComponent comp) {
             _component = comp;

@@ -336,7 +336,7 @@ public class DUUIRemoteDriver implements IDUUIDriverInterface {
             _targetView = comp.getTargetView();
             _sourceView = comp.getSourceView();
 
-            _uniqueComponentKey = "";
+            _uniqueComponentKey = "Remote";
 
             _maximum_concurrency = comp.getWorkers(1);
             _components = new ConcurrentLinkedQueue<>();
@@ -402,7 +402,7 @@ public class DUUIRemoteDriver implements IDUUIDriverInterface {
         if (comp.isWebsocket()) {
             IDUUIInstantiatedPipelineComponent.process_handler(aCas, comp, perf);
         } else {
-            IDUUIInstantiatedPipelineComponent.process(aCas, comp, perf);
+            IDUUIInstantiatedPipelineComponent.process(aCas, comp, perf, composer);
         }
     }
 

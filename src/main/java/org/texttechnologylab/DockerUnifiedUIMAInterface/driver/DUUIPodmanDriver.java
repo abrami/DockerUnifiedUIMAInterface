@@ -211,7 +211,7 @@ public class DUUIPodmanDriver implements IDUUIDriverInterface {
         }
 
 
-        DUUIDockerDriver.InstantiatedComponent comp = new DUUIDockerDriver.InstantiatedComponent(component);
+        DUUIDockerDriver.InstantiatedComponent comp = new DUUIDockerDriver.InstantiatedComponent(component, "Podman");
 
         // Inverted if check because images will never be pulled if !comp.getImageFetching() is checked.
         if (comp.getImageFetching()) {
@@ -372,7 +372,7 @@ public class DUUIPodmanDriver implements IDUUIDriverInterface {
         if (comp == null) {
             throw new InvalidParameterException("Invalid UUID, this component has not been instantiated by the local Driver");
         }
-        IDUUIInstantiatedPipelineComponent.process(aCas, comp, perf);
+        IDUUIInstantiatedPipelineComponent.process(aCas, comp, perf, composer);
 
     }
 
