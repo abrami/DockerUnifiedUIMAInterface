@@ -6,9 +6,8 @@ dependencies = [
     "duui-logging",
     "fastapi>=0.141.1",
     "pydantic>=2.13.4",
-    "ray>=2.56.1",
     "uvicorn>=0.52.1",
 ]
 
 [tool.uv.sources]
-duui-logging = { path = "../../../python_logging_lib", editable = true }
+duui-logging = { git = "https://github.com/texttechnologylab/DUUIlogger" }
