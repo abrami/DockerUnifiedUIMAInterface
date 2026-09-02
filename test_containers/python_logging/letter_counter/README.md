@@ -1,4 +1,4 @@
-# Letter Counter — DUUI Logging Example
+# Letter Counter: A DUUI Logging Example
 
 A minimal DUUI Python component that counts letter frequencies in a document. Its
 purpose is to demonstrate [`DUUI Logging`](https://texttechnologylab.github.io/DUUIlogger/)
@@ -26,7 +26,7 @@ Then, from **this** directory, start the component:
 uv run letter_counter.py
 ```
 
-`uv run` resolves and syncs the dependencies from `pyproject.toml`/`uv.lock` on its own —
-no manual virtualenv setup needed. With the component running on port `25591`, run
+`uv run` resolves and syncs the dependencies from `pyproject.toml`/`uv.lock` on its own.
+With the component running on port `25591`, run
 `LoggingTest.runDUUI` from your IDE (or `mvn test -Dtest=LoggingTest`) to send it a
 document and see the logs come through.
