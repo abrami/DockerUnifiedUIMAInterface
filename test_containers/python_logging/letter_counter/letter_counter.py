@@ -16,7 +16,6 @@ from typing import Optional
 import threading
 import uvicorn
 import os
-import ray
 import signal
 import time
 
@@ -40,8 +39,8 @@ class DUUIDocumentation(BaseModel):
 app = FastAPI(
     docs_url="/api",
     redoc_url=None,
-    title="DUUI Ray Letter Counter",
-    description="Counts letter frequencies using Ray parallel workers",
+    title="DUUI Letter Counter Logging Example",
+    description="Counts letter frequencies",
     version="1.0.0",
     terms_of_service="https://www.texttechnologylab.org/legal_notice/",
     contact={
@@ -78,12 +77,11 @@ with open(_lua_path, "rb") as f:
     _communication_script = f.read().decode("utf-8")
 
 
-# -- Ray worker function ------------------------
+# -- Count function ------------------------
 
 def _count_letters_chunk(chunk: str) -> dict:
     """
-    Count letter occurrences in a single text chunk.
-    Runs on a Ray worker — one remote call per chunk.
+    Count letter occurrences in a text.
     """
     counts: dict[str, int] = {}
     for char in chunk.lower():
@@ -121,7 +119,7 @@ def get_input_output() -> JSONResponse:
 @app.get("/v1/documentation")
 def get_documentation() -> DUUIDocumentation:
     return DUUIDocumentation(
-        annotator_name="DUUI Ray Letter Counter",
+        annotator_name="DUUI Letter Counter",
         version="1.0.0",
         implementation_lang="Python",
     )
@@ -132,16 +130,16 @@ async def process(request: DUUIRequest) -> DUUIResponse:
     """
     Count letter frequencies in one document and return the sorted counts.
     """
-    #log_info(f"Processing document ({len(request.text)} chars)", withTimeStamp=0)
 
-    log_trace("Trace Logged", withTimeStamp=0, withStacktrace=0, withException=False, logger="my-trace-logger")
-    log_info("Info Logged", withTimeStamp=0, withStacktrace=0, withException=False)
-    log_debug("Debug Logged", withTimeStamp=0, withStacktrace=0, withException=False)
-    log_warn("Warn Logged", withTimeStamp=0, withStacktrace=0, withException=False)
-    log_error("Error Logged", withTimeStamp=0, withStacktrace=5, withException=False)
-    log_critical("Critical Logged", withTimeStamp=0, withStacktrace=0, withException=False)
+    # All the logs. log_error and log_critical should be used inside an except block with "withException" se to true
+    log_trace("Trace Logged", withTimeStamp=0, withStacktrace=0, withException=False, logger="my-test-logger")
+    log_info("Info Logged", withTimeStamp=0, withStacktrace=0, withException=False, logger="my-test-logger")
+    log_debug("Debug Logged", withTimeStamp=0, withStacktrace=0, withException=False, logger="my-test-logger")
+    log_warn("Warn Logged", withTimeStamp=0, withStacktrace=0, withException=False, logger="my-test-logger")
+    log_error("Error Logged", withTimeStamp=0, withStacktrace=5, withException=False, logger="my-test-logger")
+    log_critical("Critical Logged", withTimeStamp=0, withStacktrace=0, withException=False, logger="my-test-logger")
 
-
+    # Simulates third party libraries
     _lib_logger.info("some_library initialised")
     _lib_logger.warning("some_library 1.2.0 is out of date; latest is 1.5.0")
     _lib_logger.exception("some_library failed to load config file")
@@ -149,8 +147,13 @@ async def process(request: DUUIRequest) -> DUUIResponse:
     # A DeprecationWarning raised via warnings.warn is captured too (captureWarnings=True).
     warnings.warn("some_library.old_api() is deprecated", DeprecationWarning)
 
+    # Actual example with realistic logging:
+    log_info("Now logging useful stuff:")
+
     if not request.text.strip():
-        log_warn("Document is empty. it will contribute no letter counts", logger="letter-counter", withTimeStamp=True)
+        log_warn("Document is empty. it will contribute no letter counts")
+    else:
+        log_info(f"Processing document ({len(request.text)} chars)")
 
     try:
         total: dict[str, int] = _count_letters_chunk(request.text)
@@ -160,7 +163,7 @@ async def process(request: DUUIRequest) -> DUUIResponse:
 
     total = dict(sorted(total.items()))
 
-    #log_critical(f"Done: {len(total)} unique letters", logger="letter-counter", withTimeStamp=True)
+    log_info(f"Done: {len(total)} unique letters")
     return DUUIResponse(counts=total)
 
 if __name__ == "__main__":
