@@ -104,6 +104,9 @@ The REST interface is used as a standardized way to communicate with the DUUI.
 -  **GET /v1/communication_layer** is the communication layer that is used by the analysis tool. This represents the Lua script, with the serialize and deserialize functions. In this way, DUUI enables the tool to supply its own communication layer that can be easily and dynamically executed in the DUUI context without having DUUI to "know" all tools beforehand.
 -  **POST /v1/process** is the processing function that is used by the analysis tool. This function is called for every CAS document in the pipeline. Therefore, it is the main function of the analysis tool.
 
+# Logging
+
+Python components can log during a request and have it surface on the **Java console** (and DB, if attached) via [`duui-logging`](https://texttechnologylab.github.io/DUUIlogger/).
 
 # Tutorials
 
